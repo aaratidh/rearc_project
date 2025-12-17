@@ -1,112 +1,46 @@
-import os
 import json
 import boto3
-import pandas as pd
-from io import BytesIO
+import os
 
 s3 = boto3.client("s3")
-
-BUCKET = os.environ["BUCKET"]
-POP_PREFIX = os.environ.get("POP_PREFIX", "raw/datausa/population/")
-BLS_KEY = os.environ.get(
-    "BLS_KEY",
-    "bls-folder/pr/pr.data.0.Current"
-)
-
 
 def handler(event, context):
     print("Analytics Lambda triggered")
 
-    # Load datasets
-    population_df = load_latest_population()
-    bls_df = load_bls_data()
+    for record in event["Records"]:
+        body = json.loads(record["body"])
+        s3_event = json.loads(body["Message"])
 
-    # -------------------------------
-    # Part 3.1: Mean & Std Dev (2013–2018)
-    # -------------------------------
-    pop_stats = (
-        population_df[
-            (population_df["year"] >= 2013) &
-            (population_df["year"] <= 2018)
-        ]["population"]
-        .agg(["mean", "std"])
-    )
+        for rec in s3_event["Records"]:
+            bucket = rec["s3"]["bucket"]["name"]
+            key = rec["s3"]["object"]["key"]
 
-    print("Population Mean & StdDev:", pop_stats.to_dict())
+            print(f"Reading s3://{bucket}/{key}")
+            obj = s3.get_object(Bucket=bucket, Key=key)
+            payload = json.loads(obj["Body"].read())
 
-    # -------------------------------
-    # Part 3.2: Best year per series
-    # -------------------------------
-    yearly_sum = (
-        bls_df
-        .groupby(["series_id", "year"])["value"]
-        .sum()
-        .reset_index()
-    )
+            records = payload.get("data", [])
+            if not records:
+                print("No 'data' array found — skipping")
+                continue
 
-    best_year = (
-        yearly_sum
-        .sort_values("value", ascending=False)
-        .groupby("series_id")
-        .first()
-        .reset_index()
-    )
+            valid_rows = []
+            for row in records:
+                if "Year" in row and "Population" in row:
+                    valid_rows.append(row)
+                else:
+                    print(f"Invalid row schema: {list(row.keys())}")
 
-    print("Best year per series (sample):")
-    print(best_year.head(5).to_dict(orient="records"))
+            populations = [
+                int(r["Population"])
+                for r in valid_rows
+                if 2013 <= int(r["Year"]) <= 2018
+            ]
 
-    # -------------------------------
-    # Part 3.3: Join specific series + population
-    # -------------------------------
-    joined = (
-        bls_df[
-            (bls_df["series_id"] == "PRS30006032") &
-            (bls_df["period"] == "Q01")
-        ]
-        .merge(population_df, on="year", how="inner")
-        .sort_values("year")
-    )
+            if populations:
+                mean_pop = sum(populations) / len(populations)
+                print(f"Mean US population (2013–2018): {mean_pop}")
+            else:
+                print("No valid population records found")
 
-    print("Joined series + population:")
-    print(joined.to_dict(orient="records"))
-
-    return {"statusCode": 200}
-def load_latest_population():
-    resp = s3.list_objects_v2(Bucket=BUCKET, Prefix=POP_PREFIX)
-    latest = sorted(
-        resp["Contents"],
-        key=lambda x: x["LastModified"]
-    )[-1]
-
-    obj = s3.get_object(Bucket=BUCKET, Key=latest["Key"])
-    data = json.load(obj["Body"])
-
-    df = pd.DataFrame(data["data"])
-    return df.rename(
-        columns={
-            "Year": "year",
-            "Population": "population"
-        }
-    )[["year", "population"]]
-
-
-def load_bls_data():
-    obj = s3.get_object(Bucket=BUCKET, Key=BLS_KEY)
-
-    df = pd.read_csv(
-        obj["Body"],
-        sep="\t",
-        usecols=[
-            "series_id        ",
-            "year",
-            "period",
-            "       value"
-        ]
-    )
-
-    return df.rename(
-        columns={
-            "series_id        ": "series_id",
-            "       value": "value"
-        }
-    )
+    print("Analytics Lambda completed")
