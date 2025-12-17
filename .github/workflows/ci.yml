@@ -24,14 +24,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
 
       - name: Install AWS CDK CLI
         run: npm install -g aws-cdk
 
       - name: Install Python dependencies
-  	run: |
-	  python -m pip install --upgrade pip
+        run: |
+          python -m pip install --upgrade pip
           pip install aws-cdk-lib constructs
           mkdir -p reac_pipeline/layers/python
           pip install -t reac_pipeline/layers/python requests pandas beautifulsoup4 lxml
