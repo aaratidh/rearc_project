@@ -1,2 +1,14 @@
 .git
-.gitignore
+# CDK output
+cdk.out/
+
+# Python venv
+.venv/
+venv/
+
+# Lambda layer build output (huge)
+layers/python/
+
+# Python cache
+__pycache__/
+*.pyc
