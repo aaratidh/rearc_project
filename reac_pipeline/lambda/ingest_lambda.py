@@ -20,7 +20,7 @@ def handler(event, context):
     print("Starting ingestion lambda")
 
     # ---------- Part 1: BLS ----------
-    sync_bls_to_s3(bucket=bucket, prefix=bls_prefix)
+    #sync_bls_to_s3(bucket=bucket, prefix=bls_prefix)
     print("BLS sync completed")
 
     # ---------- Part 2: Population API ----------
