@@ -21,7 +21,7 @@ def handler(event, context):
 
     # ---------- Part 1: BLS ----------
     #sync_bls_to_s3(bucket=bucket, prefix=bls_prefix)
-    print("BLS sync completed")
+    print(" skipping BLS sync completed")
 
     # ---------- Part 2: Population API ----------
     population_data = fetch_population_data()
